@@ -481,6 +481,13 @@ key = "unit:0f1e2d3c"
 peer_channels = { self = 0, "work-laptop" = 1 }
 ```
 
+On Wayland, Flow's edge detection and cursor placement require Hyprland. Its
+probe reads the global cursor, monitor layout, and held modifiers over the
+Hyprland IPC socket. Other Wayland compositors keep incoming handoffs but
+cannot start one from this machine. The Control guard needs Hyprland's Lua
+API; with a legacy `.conf` config it is unavailable, so Flow keeps the edges
+disarmed while `require_modifier` is set.
+
 The config stops loading when a peer name is empty, `self`, or has surrounding
 whitespace or control characters, two peers share a name or public key, two
 layout entries use the same edge, a layout entry or `peer_channels` names a

@@ -21,6 +21,9 @@ struct FakeState {
     control: bool,
     displays: Vec<DisplayBounds>,
     warps: Vec<(f64, f64)>,
+    /// The session cannot report modifier state, as on a Wayland compositor
+    /// without a global keyboard query.
+    unreadable_modifiers: bool,
 }
 
 /// A pointer whose state the test sets, shared with the thread under test.
@@ -66,6 +69,10 @@ impl Fake {
             .warps
             .clone()
     }
+
+    fn without_modifiers(&self) {
+        self.update(|state| state.unreadable_modifiers = true);
+    }
 }
 
 impl Pointer for Fake {
@@ -98,6 +105,14 @@ impl Pointer for Fake {
     fn warp(&mut self, to: HookPoint) -> Result<(), WarpError> {
         self.update(|state| state.warps.push((to.x, to.y)));
         Ok(())
+    }
+
+    fn reports_modifiers(&self) -> bool {
+        !self
+            .0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .unreadable_modifiers
     }
 }
 
@@ -212,6 +227,31 @@ fn a_required_modifier_gates_crossings_and_releasing_it_forgets_the_approach() {
         .expect("a fast approach with Control held");
     assert_eq!(crossing.side, EdgeSide::Right);
     assert!((crossing.t - 0.5).abs() < 1e-9);
+}
+
+#[test]
+fn an_unreadable_modifier_guard_keeps_the_edges_disarmed() {
+    let fake = Fake::with_displays(ONE_DISPLAY);
+    fake.without_modifiers();
+    let mut state = PointerLoop::new(fake.clone(), Duration::ZERO);
+    state.configure(right_edge(true));
+
+    fake.at(50.0, 50.0, false);
+    assert!(state.sample(ms(0)).is_none());
+    fake.at(99.5, 50.0, false);
+    assert!(
+        state.sample(ms(10)).is_none(),
+        "an unreadable Control guard must not arm the edge"
+    );
+
+    state.configure(right_edge(false));
+    fake.at(50.0, 50.0, false);
+    assert!(state.sample(ms(20)).is_none());
+    fake.at(99.5, 50.0, false);
+    assert!(
+        state.sample(ms(30)).is_some(),
+        "without the guard the edge works again"
+    );
 }
 
 #[test]

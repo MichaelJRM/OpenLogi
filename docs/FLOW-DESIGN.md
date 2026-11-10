@@ -1,9 +1,10 @@
 # Flow — cross-machine device handoff (design)
 
-Status: **proposal** — nothing here is implemented yet. This document records
-the intended architecture, the protocol decisions and their rationale, and the
-prior-art research they rest on, so implementation can start from settled
-ground. Once milestones land, durable decisions graduate into
+Status: **implemented** for the core handoff (pairing, QUIC transport, edge
+handoff, keyboard follow, GUI) on macOS, Windows, Linux X11, and Hyprland on
+Wayland. Clipboard sync and other Wayland compositors remain future work. This
+document records the architecture, the protocol decisions and their rationale,
+and the prior-art research they rest on; durable decisions graduate into
 [DECISIONS.md](DECISIONS.md).
 
 The peer protocol itself is specified normatively in
@@ -134,7 +135,8 @@ architecture already guarantees (the agent owns all device I/O).
 | Pointer probe: cursor position, modifiers, display bounds, entry-point warp | `crates/openlogi-hook/src/probe.rs` | done |
 | Versioned local IPC with observation cells | `crates/openlogi-ipc`, `crates/openlogi-agent-core/src/observable.rs` | done |
 
-What is missing is the network layer and the orchestration on top.
+The network layer and the orchestration on top are implemented; the milestones
+below record what remains.
 
 ## Architecture
 
@@ -433,11 +435,14 @@ detector, which reports "crossed edge E at normalized position t".
   the hook's `CursorPosition` space, which divides by each monitor's DPI scale.
 - Linux X11: `QueryPointer` and RandR monitors on the thread's own
   connection.
-- Linux Wayland: no global cursor, but two proven routes exist (wlroots
-  layer-shell 1 px edge surfaces + pointer constraints; InputCapture portal +
-  libei) — deferred to its own milestone, not excluded. The probe reports no
-  pointer there, so no edge fires. The runtime keeps running without the
-  pointer thread, and incoming handoffs still work.
+- Linux Wayland: no global cursor API. Hyprland is supported through its IPC
+  (`cursorpos`, `j/monitors`, and the Lua cursor dispatcher, with the legacy
+  dispatcher for older releases); its probe reads held modifiers through
+  `hl.is_key_down`. Other compositors still report no pointer, so no edge
+  fires; the runtime keeps running without the pointer thread, and incoming
+  handoffs still work. The generic routes — wlroots layer-shell edge surfaces
+  with pointer constraints, or the InputCapture portal with libei — remain
+  future work.
 - The thread needs the OS mouse hook to wake it. With
   `app_settings.capture_mouse_events = false`, or without Accessibility on
   macOS, no edge fires; incoming handoffs still work.
@@ -515,8 +520,8 @@ peer_channels = { self = 0, "work-laptop" = 1 }
    page, layout editor, pairing UI.
 5. **Clipboard sync.** Text first; files later over dedicated streams
    (capability-gated, no version bump).
-6. **Windows / Linux-X11 edge detection**, then **Wayland** via layer-shell or
-   InputCapture portal.
+6. **Windows / Linux-X11 edge detection**, then **Wayland**: Hyprland via its
+   IPC, then other compositors via layer-shell or the InputCapture portal.
 
 ## Options+ protocol compatibility
 

@@ -106,6 +106,42 @@ impl PointerProbe {
         }
     }
 
+    /// Whether [`Self::state`] reports the held modifier keys on this session.
+    ///
+    /// A session without a global keyboard state reports an empty modifier
+    /// set. A caller that gates on a modifier must check this first: treating
+    /// that empty set as "not held" would silently disable the gate.
+    #[must_use]
+    pub fn reports_modifiers(&self) -> bool {
+        #[cfg(target_os = "linux")]
+        {
+            self.inner.reports_modifiers()
+        }
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        {
+            true
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            false
+        }
+    }
+
+    /// Tell the probe whether [`Self::state`] must report modifiers.
+    ///
+    /// A backend whose modifier read costs an extra round trip skips it when
+    /// the caller does not gate on a modifier.
+    pub fn set_modifiers_required(&mut self, required: bool) {
+        #[cfg(target_os = "linux")]
+        {
+            self.inner.set_modifiers_required(required);
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = required;
+        }
+    }
+
     /// Read the cursor position and the held modifiers. `None` when the window
     /// system does not answer.
     pub fn state(&mut self) -> Option<PointerState> {

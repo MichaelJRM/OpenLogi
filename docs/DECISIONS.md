@@ -4,6 +4,18 @@ Durable "why we did it this way" records that are not obvious from the code.
 Add a dated entry when a non-obvious architectural or dependency decision is
 made or revisited.
 
+## 2026-11: Flow's Wayland pointer probe uses Hyprland's IPC
+
+Wayland has no global cursor or monitor-layout API. Hyprland exposes both,
+plus a cursor warp and held-key queries, over its command socket. The probe
+uses `cursorpos`, `j/monitors`, `hl.dsp.cursor.move` (with the legacy
+`movecursor` dispatcher for older releases), and `hl.is_key_down`; other
+Wayland compositors still report no pointer. Reading keyboards through evdev
+was rejected: OpenLogi's udev rules deliberately grant access to pointer
+nodes only, because a Logitech keyboard's keystrokes must not become readable
+session-wide. Hyprland's own input state answers the Control guard without
+that permission.
+
 ## 2026-11: The agent saves a paired Flow computer in `config.toml`
 
 Until now the agent only read `config.toml`; the GUI and `openlogi api` wrote

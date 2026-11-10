@@ -65,6 +65,16 @@ pub(crate) trait Pointer {
     fn displays(&mut self) -> Vec<DisplayBounds>;
     /// Move the cursor.
     fn warp(&mut self, to: HookPoint) -> Result<(), WarpError>;
+    /// Whether [`Self::state`] reports the held modifier keys. A session
+    /// without a global keyboard state reports none, so the Control guard
+    /// must not read that as "not held".
+    fn reports_modifiers(&self) -> bool {
+        true
+    }
+
+    /// Tell the probe whether [`Self::state`] must report modifiers, so a
+    /// backend can skip the read when no guard uses it.
+    fn set_modifiers_required(&mut self, _required: bool) {}
 }
 
 impl Pointer for PointerProbe {
@@ -78,6 +88,14 @@ impl Pointer for PointerProbe {
 
     fn warp(&mut self, to: HookPoint) -> Result<(), WarpError> {
         Self::warp(self, to)
+    }
+
+    fn reports_modifiers(&self) -> bool {
+        PointerProbe::reports_modifiers(self)
+    }
+
+    fn set_modifiers_required(&mut self, required: bool) {
+        PointerProbe::set_modifiers_required(self, required);
     }
 }
 
@@ -278,10 +296,23 @@ impl<P: Pointer> PointerLoop<P> {
     }
 
     fn configure(&mut self, settings: PointerSettings) {
-        if settings.sides != self.settings.sides {
-            self.detector = EdgeDetector::new(self.edges.clone(), settings.sides, self.params);
+        self.pointer
+            .set_modifiers_required(settings.require_modifier);
+        let sides = if settings.require_modifier && !self.pointer.reports_modifiers() {
+            if settings.sides != ArmedSides::NONE {
+                warn!(
+                    "Flow's Control guard needs a global modifier state, which this session \
+                     does not provide; edge handoff stays off"
+                );
+            }
+            ArmedSides::NONE
+        } else {
+            settings.sides
+        };
+        if sides != self.settings.sides {
+            self.detector = EdgeDetector::new(self.edges.clone(), sides, self.params);
         }
-        self.settings = settings;
+        self.settings = PointerSettings { sides, ..settings };
     }
 
     const fn next_refresh(&self) -> Duration {
